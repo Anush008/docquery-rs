@@ -9,3 +9,4 @@ edition = "2021"
 actix-web = "4.3.1"
 lopdf = "0.30.0"
 serde = { version = "1.0", features = ["derive"] }
+thiserror = "1"
