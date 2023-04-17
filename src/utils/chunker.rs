@@ -10,7 +10,7 @@ use redis::{Client, Connection};
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
     static ref RE_SPACE: Regex = Regex::new(r"\s+").unwrap();
-    static ref REDIS_CLIENT:Client = Client::open(env!("DOCGPT_REDIS", "REDIS URI NOT SET IN THE DOCGPT_REDIS ENV!")).unwrap();
+    static ref REDIS_CLIENT:Client = Client::open(std::env::var("DOCGPT_REDIS").expect("REDIS URI NOT SET IN THE DOCGPT_REDIS ENV!")).expect("INVALID REDIS URI!");
     static ref REDIS_CONNECTION:Mutex<Connection> = Mutex::new(REDIS_CLIENT.get_connection().unwrap());
 }
 
