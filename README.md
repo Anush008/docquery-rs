@@ -9,7 +9,7 @@ docgpt-rs is a Rust backend for a mobile app that applies text similarity and ge
 ## TODO
 - [x] Create a service to receive the PDF
 - [x] Chunk the text-content with the page number citation 
-- [ ] Upload the chunks to a Redis store and return the key
+- [x] Set the chunks to a Redis store and return the key
 - [ ] Create a service to get answers about the PDF
 
 ## Credits
