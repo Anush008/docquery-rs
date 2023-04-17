@@ -1,11 +1,17 @@
 use actix_web::web::Bytes;
 use lazy_static::lazy_static;
 use lopdf::Document;
+use redis::Commands;
 use regex::Regex;
+use std::sync::{Mutex};
+use uuid::Uuid;
+use redis::{Client, Connection};
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
     static ref RE_SPACE: Regex = Regex::new(r"\s+").unwrap();
+    static ref REDIS_CLIENT:Client = Client::open(env!("DOCGPT_REDIS", "REDIS URI NOT SET IN THE DOCGPT_REDIS ENV!")).unwrap();
+    static ref REDIS_CONNECTION:Mutex<Connection> = Mutex::new(REDIS_CLIENT.get_connection().unwrap());
 }
 
 fn preprocess(text: String) -> String {
@@ -14,7 +20,7 @@ fn preprocess(text: String) -> String {
         .to_string()
 }
 
-pub fn chunk(pdf: Bytes) -> Vec<String> {
+pub fn chunk(pdf: Bytes) -> String {
     let doc = Document::load_mem(&pdf.to_vec()).unwrap();
     let pages = doc.get_pages();
     let mut chunks: Vec<String> = Vec::new();
@@ -30,5 +36,8 @@ pub fn chunk(pdf: Bytes) -> Vec<String> {
             .collect();
         chunks.append(&mut chunk);
     }
-    chunks
+    let mut redis_connection = REDIS_CONNECTION.lock().unwrap();
+    let key = Uuid::new_v4().to_string();
+    let _: () = redis_connection.rpush(key.as_str(), chunks).unwrap();
+    key
 }
