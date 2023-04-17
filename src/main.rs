@@ -3,8 +3,7 @@ mod utils;
 
 #[post("/pdf")]
 async fn upload_pdf(pdf: web::Bytes) -> impl Responder {
-    let chunks = utils::chunker::chunk(pdf);
-    chunks.len().to_string()
+    utils::chunker::chunk(pdf)
 }
 
 #[actix_web::main]
