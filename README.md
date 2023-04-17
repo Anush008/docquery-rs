@@ -1,5 +1,5 @@
 # docgpt-rs
-docgpt-rs is a Rust backend for a mobile app that applies text similarity and generation models to split PDFs into vectors of page-numbered strings, and produces valid answers to user questions.
+docgpt-rs is a Rust backend for a mobile app that applies text similarity and generation models to split PDFs into vectors of page-numbered strings and produce valid answers to user queries.
 
 ## Tech
 
