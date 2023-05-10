@@ -3,21 +3,15 @@ use lazy_static::lazy_static;
 use lopdf::Document;
 use redis::Commands;
 use regex::Regex;
-use std::{sync::Mutex, error};
+use std::{ sync::Mutex };
 use uuid::Uuid;
 use redis::{Client, Connection};
-use serde_json::json;
-use actix_web::Result;
-use reqwest::{header::HeaderMap};
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
     static ref RE_SPACE: Regex = Regex::new(r"\s+").unwrap();
     static ref REDIS_CLIENT:Client = Client::open(std::env::var("REDIS_URI").expect("REDIS_URI NOT SET!")).expect("INVALID REDIS URI!");
     static ref REDIS_CONNECTION:Mutex<Connection> = Mutex::new(REDIS_CLIENT.get_connection().unwrap());
-    static ref REQWEST_CLIENT: Mutex<reqwest::Client> = Mutex::new(reqwest::Client::new());
-    static ref TEXT_SIMILARITY_ENDPOINT: String = std::env::var("SIMILARITY_ENDPOINT").expect("SIMILARITY_ENDPOINT NOT SET!");
-    static ref TEXT_SIMILARITY_TOKEN: String = std::env::var("SIMILARITY_TOKEN").expect("SIMILARITY_TOKEN NOT SET!");
 }
 
 fn preprocess(text: String) -> String {
@@ -48,17 +42,8 @@ pub fn chunk(pdf: Bytes) -> String {
     key
 }
 
-pub async fn query(id: &str, question: &str) -> Result<String, Box<dyn error::Error>> {
+pub async fn query(id: &str, _question: &str) -> String {
     let mut redis_connection = REDIS_CONNECTION.lock().unwrap();
-    let chunks: Vec<String> = redis_connection.lrange(id, 0, -1).unwrap();
-
-    let client = REQWEST_CLIENT.lock().unwrap();
-    let mut headers = HeaderMap::new();
-    headers.insert("Authorization", TEXT_SIMILARITY_TOKEN.parse().unwrap());
-    let payload = json!({
-        "source_sentence": question,
-        "sentences": chunks
-    });
-    let response = client.post(TEXT_SIMILARITY_ENDPOINT.as_str()).json(&payload).headers(headers).send().await?;
-    Ok(response.text().await?)
+    let _chunks: Vec<String> = redis_connection.lrange(id, 0, -1).unwrap();
+    String::from("BOI")
 }
