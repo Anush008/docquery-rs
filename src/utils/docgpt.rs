@@ -7,7 +7,7 @@ use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{sync::Mutex, collections::HashMap};
 use uuid::Uuid;
-use ndarray::{Array1, ArrayView1};
+use ndarray::ArrayView1;
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
@@ -32,6 +32,8 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
     let doc = Document::load_mem(&pdf.to_vec()).unwrap();
     let pages = doc.get_pages();
     let mut chunks: Vec<String> = Vec::new();
+    let model = model.lock().unwrap();
+    let mut embeddings: Vec<Vec<f32>> = Vec::new();
     for page_num in 1..=pages.len() {
         let text = doc.extract_text(&[page_num.try_into().unwrap()]).unwrap();
         let text = preprocess(text);
@@ -40,14 +42,17 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
             .collect::<Vec<char>>()
             .chunks(150)
             .map(|chunk| chunk.iter().collect::<String>())
-            .map(|s| format!("[{page_num}] {s}"))
+            .map(|s: String| format!("[{page_num}] {s}"))
+            .map(|s: String| {
+                let mut embedding = model.encode(&[&s]).unwrap();            
+                embeddings.append(&mut embedding);
+                s
+            })
             .collect();
-        chunk.push(format!("Total pages: {}", pages.len()));
         chunks.append(&mut chunk);
     }
+    embeddings.append(&mut model.encode(&[format!("Total pages in the PDF - {}", pages.len())]).unwrap());
     let key = Uuid::new_v4().to_string();
-    let model = model.lock().unwrap();
-    let embeddings = model.encode(&chunks).unwrap();
     let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
     embeddings_collection.insert(key.clone(), embeddings);
     let mut pdf_collection = PDF_COLLECTION.lock().unwrap();
