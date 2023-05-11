@@ -17,7 +17,7 @@ async fn query_pdf(
     query: web::Json<utils::data::Query>,
     model: web::Data<Mutex<SentenceEmbeddingsModel>>,
 ) -> impl Responder {
-    utils::docgpt::query(&query.id, &query.question, model).await
+    utils::docgpt::query(&query.id, &query.question, model)
 }
 
 #[actix_web::main]

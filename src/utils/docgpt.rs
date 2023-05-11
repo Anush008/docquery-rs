@@ -7,6 +7,7 @@ use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{sync::Mutex, collections::HashMap};
 use uuid::Uuid;
+use ndarray::{Array1, ArrayView1};
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
@@ -37,7 +38,7 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
         let mut chunk: Vec<String> = text
             .chars()
             .collect::<Vec<char>>()
-            .chunks(500)
+            .chunks(150)
             .map(|chunk| chunk.iter().collect::<String>())
             .map(|s| format!("[{page_num}] {s}"))
             .collect();
@@ -54,18 +55,32 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
     key
 }
 
-pub async fn query(
+pub fn query(
     id: &str,
-    _question: &str,
-    _model: web::Data<Mutex<SentenceEmbeddingsModel>>,
+    question: &str,
+    model: web::Data<Mutex<SentenceEmbeddingsModel>>,
 ) -> String {
     let embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
-    let pdf_collection = PDF_COLLECTION.lock().unwrap();
+    //let pdf_collection = PDF_COLLECTION.lock().unwrap();
     let embeddings = embeddings_collection.get(id).unwrap();
-    let pdf = pdf_collection.get(id).unwrap();
+    //let pdf = pdf_collection.get(id).unwrap();
+    let model = model.lock().unwrap();
+    let question_embedding = model.encode(&[question]).unwrap();
+    let similarities: Vec<f32> = embeddings
+    .iter()
+    .map(|embedding| cosine_similarity(ArrayView1::from(&question_embedding[0]), ArrayView1::from(embedding)))
+    .collect();
     dbg!(
-        embeddings
+        similarities
     );
     
     String::from("BOILERPLATE")
+}
+
+
+fn cosine_similarity(a: ArrayView1<f32>, b: ArrayView1<f32>) -> f32 {
+    let dot_product = a.dot(&b);
+    let norm_a = a.dot(&a).sqrt();
+    let norm_b = b.dot(&b).sqrt();
+    dot_product / (norm_a * norm_b)
 }
