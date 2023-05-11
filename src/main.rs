@@ -8,8 +8,8 @@ use tokio::task;
 use actix_web::{post, web, App, HttpServer, Responder};
 
 #[post("/pdf")]
-async fn upload_pdf(pdf: web::Bytes) -> impl Responder {
-    utils::docgpt::chunk(pdf)
+async fn upload_pdf(pdf: web::Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> impl Responder {
+    utils::docgpt::chunk(pdf, model)
 }
 
 #[post("/query")]
@@ -23,7 +23,7 @@ async fn query_pdf(
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let model = task::spawn_blocking(move || {
-        SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
+        SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL6V2)
             .create_model()
             .unwrap()
     })

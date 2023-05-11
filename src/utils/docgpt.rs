@@ -1,22 +1,24 @@
-use actix_web::web;
-use actix_web::web::Bytes;
+#![allow(unused_mut)]
+
+use actix_web::web::{self, Bytes};
 use lazy_static::lazy_static;
 use lopdf::Document;
-use redis::Commands;
-use redis::{Client, Connection};
 use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
-use std::{sync::Mutex, time::Instant};
+use std::{sync::Mutex, collections::HashMap};
 use uuid::Uuid;
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
     static ref RE_SPACE: Regex = Regex::new(r"\s+").unwrap();
-    static ref REDIS_CLIENT: Client =
-        Client::open(std::env::var("REDIS_URI").expect("REDIS_URI NOT SET!"))
-            .expect("INVALID REDIS URI!");
-    static ref REDIS_CONNECTION: Mutex<Connection> =
-        Mutex::new(REDIS_CLIENT.get_connection().unwrap());
+    static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
+        let mut pdf_collection: HashMap<String, Vec<String>> = HashMap::new();
+        Mutex::new(pdf_collection)
+    };
+    static ref EMBEDDINGS_COLLECTION: Mutex<HashMap<String, Vec<Vec<f32>>>> = {
+        let mut embeddings_collection: HashMap<String, Vec<Vec<f32>>> = HashMap::new();
+        Mutex::new(embeddings_collection)
+    };
 }
 
 fn preprocess(text: String) -> String {
@@ -25,7 +27,7 @@ fn preprocess(text: String) -> String {
         .to_string()
 }
 
-pub fn chunk(pdf: Bytes) -> String {
+pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> String {
     let doc = Document::load_mem(&pdf.to_vec()).unwrap();
     let pages = doc.get_pages();
     let mut chunks: Vec<String> = Vec::new();
@@ -39,23 +41,31 @@ pub fn chunk(pdf: Bytes) -> String {
             .map(|chunk| chunk.iter().collect::<String>())
             .map(|s| format!("[{page_num}] {s}"))
             .collect();
+        chunk.push(format!("Total pages: {}", pages.len()));
         chunks.append(&mut chunk);
     }
-    let mut redis_connection = REDIS_CONNECTION.lock().unwrap();
     let key = Uuid::new_v4().to_string();
-    let _: () = redis_connection.rpush(key.as_str(), chunks).unwrap();
+    let model = model.lock().unwrap();
+    let embeddings = model.encode(&chunks).unwrap();
+    let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
+    embeddings_collection.insert(key.clone(), embeddings);
+    let mut pdf_collection = PDF_COLLECTION.lock().unwrap();
+    pdf_collection.insert(key.clone(), chunks);
     key
 }
 
 pub async fn query(
     id: &str,
     _question: &str,
-    model: web::Data<Mutex<SentenceEmbeddingsModel>>,
+    _model: web::Data<Mutex<SentenceEmbeddingsModel>>,
 ) -> String {
-    let mut redis_connection = REDIS_CONNECTION.lock().unwrap();
-    let chunks: Vec<String> = redis_connection.lrange(id, 0, -1).unwrap();
-    let model = model.lock().unwrap();
-    let now = Instant::now();
-    model.encode(&chunks).unwrap();
-    format!("Time taken: {:?}", now.elapsed())
+    let embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
+    let pdf_collection = PDF_COLLECTION.lock().unwrap();
+    let embeddings = embeddings_collection.get(id).unwrap();
+    let pdf = pdf_collection.get(id).unwrap();
+    dbg!(
+        embeddings
+    );
+    
+    String::from("BOILERPLATE")
 }
