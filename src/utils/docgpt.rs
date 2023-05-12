@@ -42,7 +42,7 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
         let mut chunk: Vec<String> = text
             .chars()
             .collect::<Vec<char>>()
-            .chunks(150)
+            .chunks(200)
             .map(|chunk| chunk.iter().collect::<String>())
             .map(|s: String| format!("[{page_num}] {s}"))
             .map(|s: String| {
@@ -77,14 +77,11 @@ pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddings
             )
         })
         .collect();
-    let max_index = similarities
-        .iter()
-        .enumerate()
-        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-        .map(|(index, _)| index)
-        .unwrap();
-    let similar_sentence = &pdf[max_index];
-    similar_sentence.to_string()
+    let mut indexed_vec: Vec<(usize, &f32)> = similarities.iter().enumerate().collect();
+    indexed_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+    let indices: Vec<usize> = indexed_vec.iter().map(|x| x.0).take(3).collect();
+    dbg!(&pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]]);
+    String::from("Hello World")
 }
 
 fn cosine_similarity(a: ArrayView1<f32>, b: ArrayView1<f32>) -> f32 {
