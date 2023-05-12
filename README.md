@@ -1,5 +1,5 @@
 # docquery-rs
-docquery-rs is a that applies text embedding and generation models to produce valid answers to user queries about a PDF uploaded by the user.
+docquery-rs is a Rust back-end that applies text embedding and generation models to produce valid answers to user queries about a PDF uploaded by the user.
 
 ## Tech
 
