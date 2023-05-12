@@ -9,7 +9,6 @@ use openai_api_rs::v1::{
     chat_completion::{self, ChatCompletionRequest},
 };
 use rayon::prelude::*;
-use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{
     collections::HashMap,
@@ -18,9 +17,9 @@ use std::{
 };
 use uuid::Uuid;
 
+use super::helpers::{preprocess_text, cosine_similarity};
+
 lazy_static! {
-    static ref RE_NL: Regex = Regex::new(r"\n").expect("Invalid regex!");
-    static ref RE_SPACE: Regex = Regex::new(r"\s+").expect("Invalid regex!");
     static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
         let mut pdf_collection: HashMap<String, Vec<String>> = HashMap::new();
         Mutex::new(pdf_collection)
@@ -33,11 +32,6 @@ lazy_static! {
         Client::new(env::var("OPENAI_API_KEY").expect("OpenAI client instantiation failed!"));
 }
 
-fn preprocess(text: String) -> String {
-    RE_SPACE
-        .replace_all(&RE_NL.replace_all(&text, ""), " ")
-        .to_string()
-}
 
 pub fn chunk(
     pdf: Bytes,
@@ -56,7 +50,7 @@ pub fn chunk(
     );
     for page_num in 1..=pages.len() {
         let text = doc.extract_text(&[page_num.try_into()?])?;
-        let text = preprocess(text);
+        let text = preprocess_text(text);
         let mut chunk: Vec<String> = text
             .chars()
             .collect::<Vec<char>>()
@@ -133,9 +127,4 @@ pub async fn query(
     Ok(result.choices[0].message.content.clone())
 }
 
-fn cosine_similarity(a: ArrayView1<f32>, b: ArrayView1<f32>) -> f32 {
-    let dot_product = a.dot(&b);
-    let norm_a = a.dot(&a).sqrt();
-    let norm_b = b.dot(&b).sqrt();
-    dot_product / (norm_a * norm_b)
-}
+
