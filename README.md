@@ -1,5 +1,5 @@
 # docquery-rs
-docquery-rs is a Rust backend for a mobile app that applies text similarity and generation models to split PDFs into vectors of page-numbered strings and produce valid answers to user queries.
+docquery-rs is a that applies text embedding and generation models to produce valid answers to user queries about a PDF uploaded by the user.
 
 ## Tech
 
