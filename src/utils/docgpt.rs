@@ -29,11 +29,13 @@ fn preprocess(text: String) -> String {
 }
 
 pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> String {
-    let doc = Document::load_mem(&pdf.to_vec()).unwrap();
-    let pages = doc.get_pages();
-    let mut chunks: Vec<String> = Vec::new();
     let model = model.lock().unwrap();
+    let doc = Document::load_mem(&pdf.to_vec()).unwrap();
     let mut embeddings: Vec<Vec<f32>> = Vec::new();
+    let mut chunks: Vec<String> = Vec::new();
+    let pages = doc.get_pages();
+    chunks.push(format!("[0] Total pages in the PDF - {}", pages.len()));
+    embeddings.append(&mut model.encode(&[&chunks.last().unwrap()]).unwrap());
     for page_num in 1..=pages.len() {
         let text = doc.extract_text(&[page_num.try_into().unwrap()]).unwrap();
         let text = preprocess(text);
@@ -51,7 +53,6 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
             .collect();
         chunks.append(&mut chunk);
     }
-    embeddings.append(&mut model.encode(&[format!("Total pages in the PDF - {}", pages.len())]).unwrap());
     let key = Uuid::new_v4().to_string();
     let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
     embeddings_collection.insert(key.clone(), embeddings);
@@ -66,20 +67,21 @@ pub fn query(
     model: web::Data<Mutex<SentenceEmbeddingsModel>>,
 ) -> String {
     let embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
-    //let pdf_collection = PDF_COLLECTION.lock().unwrap();
+    let pdf_collection = PDF_COLLECTION.lock().unwrap();
     let embeddings = embeddings_collection.get(id).unwrap();
-    //let pdf = pdf_collection.get(id).unwrap();
+    let pdf = pdf_collection.get(id).unwrap();
     let model = model.lock().unwrap();
     let question_embedding = model.encode(&[question]).unwrap();
     let similarities: Vec<f32> = embeddings
     .iter()
     .map(|embedding| cosine_similarity(ArrayView1::from(&question_embedding[0]), ArrayView1::from(embedding)))
     .collect();
-    dbg!(
-        similarities
-    );
-    
-    String::from("BOILERPLATE")
+    let max_index = similarities.iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .map(|(index, _)| index).unwrap();
+    let similar_sentence = &pdf[max_index];
+    similar_sentence.to_string()
 }
 
 
