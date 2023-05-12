@@ -1,7 +1,10 @@
+use crate::utils::{
+    data::Query,
+    pdfquery::{chunk, query},
+};
 use actix_web::{post, web, HttpRequest, Responder};
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::sync::{Arc, Mutex};
-use crate::utils::{ pdfquery::{ chunk, query}, data::Query };
 
 #[post("/pdf")]
 async fn upload_pdf(request: HttpRequest, pdf: web::Bytes) -> impl Responder {

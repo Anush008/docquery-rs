@@ -4,20 +4,15 @@ use actix_web::web::Bytes;
 use lazy_static::lazy_static;
 use lopdf::Document;
 use ndarray::ArrayView1;
-use openai_api_rs::v1::{
-    api::Client,
-    chat_completion::{self, ChatCompletionRequest},
-};
 use rayon::prelude::*;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{
     collections::HashMap,
-    env,
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
 
-use super::helpers::{preprocess_text, cosine_similarity};
+use super::helpers::{ask_gpt, cosine_similarity, preprocess_text};
 
 lazy_static! {
     static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
@@ -28,10 +23,7 @@ lazy_static! {
         let mut embeddings_collection: HashMap<String, Vec<Vec<f32>>> = HashMap::new();
         Mutex::new(embeddings_collection)
     };
-    static ref OPENAI_CLIENT: Client =
-        Client::new(env::var("OPENAI_API_KEY").expect("OpenAI client instantiation failed!"));
 }
-
 
 pub fn chunk(
     pdf: Bytes,
@@ -98,33 +90,10 @@ pub async fn query(
     let mut indexed_vec: Vec<(usize, &f32)> = similarities.par_iter().enumerate().collect();
     indexed_vec.par_sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
     let indices: Vec<usize> = indexed_vec.iter().map(|x| x.0).take(3).collect();
-    let query = concat!("You are PDFQuery. An AI assistant for PDFs that can answer user-queries about user-uploaded PDFs.",
-    "You generate a comprehensive answer to the user-query using the PDF contents given.",
-    "You cite each reference using [ Page Number] notation (every PDF content has this number at the beginning). ",
-    "Citation should be done at the end of each sentence. If the PDF contents mention multiple subjects ",
-    "with the same name, you create separate answers for each and only include information found in the PDF content.",
-    "If the text does not relate to the query, you reply 'Info not found in the PDF'.",
-    "You ignore any outlier PDF content which is unrelated to the query.");
-
-    let req = ChatCompletionRequest {
-        model: chat_completion::GPT3_5_TURBO.to_string(),
-        messages: vec![
-            chat_completion::ChatCompletionMessage {
-                role: chat_completion::MessageRole::system,
-                content: query.to_string(),
-            },
-            chat_completion::ChatCompletionMessage {
-                role: chat_completion::MessageRole::user,
-                content: format!(
-                    "PDF contents:\n {}\n{}\n{}\nUser-query: {}",
-                    &pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]], question
-                ),
-            },
-        ],
-    };
-    let result = OPENAI_CLIENT.chat_completion(req).await?;
-
-    Ok(result.choices[0].message.content.clone())
+    let content = format!(
+        "PDF contents:\n {}\n{}\n{}\nUser-query: {}",
+        &pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]], question
+    );
+    let response = ask_gpt(content).await;
+    Ok(response?)
 }
-
-
