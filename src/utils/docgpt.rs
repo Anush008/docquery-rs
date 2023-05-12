@@ -28,16 +28,16 @@ fn preprocess(text: String) -> String {
         .to_string()
 }
 
-pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> String {
-    let model = model.lock().unwrap();
-    let doc = Document::load_mem(&pdf.to_vec()).unwrap();
+pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> Result<String, Box<dyn std::error::Error>> {
+    let model = model.lock().expect("Model lock is poisoned");
+    let doc = Document::load_mem(&pdf.to_vec())?;
     let mut embeddings: Vec<Vec<f32>> = Vec::new();
     let mut chunks: Vec<String> = Vec::new();
     let pages = doc.get_pages();
     chunks.push(format!("[0] Total pages in the PDF - {}", pages.len()));
-    embeddings.append(&mut model.encode(&[&chunks.last().unwrap()]).unwrap());
+    embeddings.append(&mut model.encode(&[&chunks.first().ok_or("Page number embeddings failed to generate")?])?);
     for page_num in 1..=pages.len() {
-        let text = doc.extract_text(&[page_num.try_into().unwrap()]).unwrap();
+        let text = doc.extract_text(&[page_num.try_into()?])?;
         let text = preprocess(text);
         let mut chunk: Vec<String> = text
             .chars()
@@ -46,7 +46,7 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
             .map(|chunk| chunk.iter().collect::<String>())
             .map(|s: String| format!("[{page_num}] {s}"))
             .map(|s: String| {
-                let mut embedding = model.encode(&[&s]).unwrap();
+                let mut embedding = model.encode(&[&s]).expect("Encoding failed");
                 embeddings.append(&mut embedding);
                 s
             })
@@ -54,20 +54,20 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
         chunks.append(&mut chunk);
     }
     let key = Uuid::new_v4().to_string();
-    let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
+    let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
     embeddings_collection.insert(key.clone(), embeddings);
-    let mut pdf_collection = PDF_COLLECTION.lock().unwrap();
+    let mut pdf_collection = PDF_COLLECTION.lock()?;
     pdf_collection.insert(key.clone(), chunks);
-    key
+    Ok(key)
 }
 
-pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> String {
-    let embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
-    let pdf_collection = PDF_COLLECTION.lock().unwrap();
-    let embeddings = embeddings_collection.get(id).unwrap();
-    let pdf = pdf_collection.get(id).unwrap();
-    let model = model.lock().unwrap();
-    let question_embedding = model.encode(&[question]).unwrap();
+pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> Result<String, Box<dyn std::error::Error>> {
+    let model = model.lock().expect("Model lock is poisoned");
+    let embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
+    let pdf_collection = PDF_COLLECTION.lock()?;
+    let pdf = pdf_collection.get(id).ok_or("Invalid PDF ID")?;
+    let embeddings = embeddings_collection.get(id).ok_or("Invalid Embeddings ID")?;
+    let question_embedding = model.encode(&[question])?;
     let similarities: Vec<f32> = embeddings
         .iter()
         .map(|embedding| {
@@ -81,7 +81,7 @@ pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddings
     indexed_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
     let indices: Vec<usize> = indexed_vec.iter().map(|x| x.0).take(3).collect();
     dbg!(&pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]]);
-    String::from("Hello World")
+    Ok(String::from("Hello World"))
 }
 
 fn cosine_similarity(a: ArrayView1<f32>, b: ArrayView1<f32>) -> f32 {
