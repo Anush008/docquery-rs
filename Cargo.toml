@@ -12,7 +12,7 @@ panic = "abort"
 [dependencies]
 actix-web = "4.3.1"
 lazy_static = "1.4.0"
-lopdf = "0.30.0"
+lopdf = "0.31.0"
 ndarray = "0.15.6"
 openai-api-rs = "0.1.7"
 rayon = "1.7.0"
