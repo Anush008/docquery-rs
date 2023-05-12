@@ -8,7 +8,10 @@ use tokio::task;
 use actix_web::{post, web, App, HttpServer, Responder};
 
 #[post("/pdf")]
-async fn upload_pdf(pdf: web::Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> impl Responder {
+async fn upload_pdf(
+    pdf: web::Bytes,
+    model: web::Data<Mutex<SentenceEmbeddingsModel>>,
+) -> impl Responder {
     utils::docgpt::chunk(pdf, model)
 }
 
@@ -30,12 +33,12 @@ async fn main() -> std::io::Result<()> {
     .await
     .unwrap();
     println!("Model loaded!");
-    let counter = web::Data::new(Mutex::new(model));
+    let model = web::Data::new(Mutex::new(model));
 
     HttpServer::new(move || {
         App::new()
             .app_data(web::PayloadConfig::default().limit(1024 * 1024 * 10))
-            .app_data(counter.clone())
+            .app_data(model.clone())
             .service(upload_pdf)
             .service(query_pdf)
     })

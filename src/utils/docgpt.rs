@@ -3,11 +3,11 @@
 use actix_web::web::{self, Bytes};
 use lazy_static::lazy_static;
 use lopdf::Document;
+use ndarray::ArrayView1;
 use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
-use std::{sync::Mutex, collections::HashMap};
+use std::{collections::HashMap, sync::Mutex};
 use uuid::Uuid;
-use ndarray::ArrayView1;
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
@@ -46,7 +46,7 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
             .map(|chunk| chunk.iter().collect::<String>())
             .map(|s: String| format!("[{page_num}] {s}"))
             .map(|s: String| {
-                let mut embedding = model.encode(&[&s]).unwrap();            
+                let mut embedding = model.encode(&[&s]).unwrap();
                 embeddings.append(&mut embedding);
                 s
             })
@@ -61,11 +61,7 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> St
     key
 }
 
-pub fn query(
-    id: &str,
-    question: &str,
-    model: web::Data<Mutex<SentenceEmbeddingsModel>>,
-) -> String {
+pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> String {
     let embeddings_collection = EMBEDDINGS_COLLECTION.lock().unwrap();
     let pdf_collection = PDF_COLLECTION.lock().unwrap();
     let embeddings = embeddings_collection.get(id).unwrap();
@@ -73,17 +69,23 @@ pub fn query(
     let model = model.lock().unwrap();
     let question_embedding = model.encode(&[question]).unwrap();
     let similarities: Vec<f32> = embeddings
-    .iter()
-    .map(|embedding| cosine_similarity(ArrayView1::from(&question_embedding[0]), ArrayView1::from(embedding)))
-    .collect();
-    let max_index = similarities.iter()
+        .iter()
+        .map(|embedding| {
+            cosine_similarity(
+                ArrayView1::from(&question_embedding[0]),
+                ArrayView1::from(embedding),
+            )
+        })
+        .collect();
+    let max_index = similarities
+        .iter()
         .enumerate()
         .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-        .map(|(index, _)| index).unwrap();
+        .map(|(index, _)| index)
+        .unwrap();
     let similar_sentence = &pdf[max_index];
     similar_sentence.to_string()
 }
-
 
 fn cosine_similarity(a: ArrayView1<f32>, b: ArrayView1<f32>) -> f32 {
     let dot_product = a.dot(&b);
