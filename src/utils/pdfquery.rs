@@ -1,15 +1,22 @@
 #![allow(unused_mut)]
 
-use openai_api_rs::v1::{api::Client, chat_completion::{self, ChatCompletionRequest}};
-use actix_web::web::{self, Bytes};
+use actix_web::web::Bytes;
 use lazy_static::lazy_static;
 use lopdf::Document;
 use ndarray::ArrayView1;
+use openai_api_rs::v1::{
+    api::Client,
+    chat_completion::{self, ChatCompletionRequest},
+};
+use rayon::prelude::*;
 use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
-use std::{collections::HashMap, sync::Mutex, env};
+use std::{
+    collections::HashMap,
+    env,
+    sync::{Arc, Mutex},
+};
 use uuid::Uuid;
-use rayon::prelude::*;
 
 lazy_static! {
     static ref RE_NL: Regex = Regex::new(r"\n").expect("Invalid regex!");
@@ -22,7 +29,8 @@ lazy_static! {
         let mut embeddings_collection: HashMap<String, Vec<Vec<f32>>> = HashMap::new();
         Mutex::new(embeddings_collection)
     };
-    static ref OPENAI_CLIENT: Client = Client::new(env::var("OPENAI_API_KEY").expect("OpenAI client instantiation failed!"));
+    static ref OPENAI_CLIENT: Client =
+        Client::new(env::var("OPENAI_API_KEY").expect("OpenAI client instantiation failed!"));
 }
 
 fn preprocess(text: String) -> String {
@@ -31,14 +39,21 @@ fn preprocess(text: String) -> String {
         .to_string()
 }
 
-pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> Result<String, Box<dyn std::error::Error>> {
+pub fn chunk(
+    pdf: Bytes,
+    model: &Arc<Mutex<SentenceEmbeddingsModel>>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let model = model.lock().expect("Model lock is poisoned!");
     let doc = Document::load_mem(&pdf.to_vec())?;
     let mut embeddings: Vec<Vec<f32>> = Vec::new();
     let mut chunks: Vec<String> = Vec::new();
     let pages = doc.get_pages();
     chunks.push(format!("[0] Total pages in the PDF - {}", pages.len()));
-    embeddings.append(&mut model.encode(&[&chunks.first().ok_or("Page number embeddings failed to generate!")?])?);
+    embeddings.append(
+        &mut model.encode(&[&chunks
+            .first()
+            .ok_or("Page number embeddings failed to generate!")?])?,
+    );
     for page_num in 1..=pages.len() {
         let text = doc.extract_text(&[page_num.try_into()?])?;
         let text = preprocess(text);
@@ -64,12 +79,18 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> Re
     Ok(key)
 }
 
-pub async fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn query(
+    id: &str,
+    question: &str,
+    model: &Arc<Mutex<SentenceEmbeddingsModel>>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let model = model.lock().expect("Model lock is poisoned!");
     let embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
     let pdf_collection = PDF_COLLECTION.lock()?;
     let pdf = pdf_collection.get(id).ok_or("Invalid PDF ID")?;
-    let embeddings = embeddings_collection.get(id).ok_or("Invalid Embeddings ID!")?;
+    let embeddings = embeddings_collection
+        .get(id)
+        .ok_or("Invalid Embeddings ID!")?;
     let question_embedding = model.encode(&[question])?;
     let similarities: Vec<f32> = embeddings
         .par_iter()
@@ -90,17 +111,21 @@ pub async fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbe
     "with the same name, you create separate answers for each and only include information found in the PDF content.",
     "If the text does not relate to the query, you reply 'Info not found in the PDF'.",
     "You ignore any outlier PDF content which is unrelated to the query.");
-    
+
     let req = ChatCompletionRequest {
         model: chat_completion::GPT3_5_TURBO.to_string(),
-        messages: vec![chat_completion::ChatCompletionMessage {
-            role: chat_completion::MessageRole::system,
-            content: query.to_string(),
-        },
-        chat_completion::ChatCompletionMessage {
-            role: chat_completion::MessageRole::user,
-            content: format!("PDF contents:\n {}\n{}\n{}\nUser-query: {}", &pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]], question)
-        }
+        messages: vec![
+            chat_completion::ChatCompletionMessage {
+                role: chat_completion::MessageRole::system,
+                content: query.to_string(),
+            },
+            chat_completion::ChatCompletionMessage {
+                role: chat_completion::MessageRole::user,
+                content: format!(
+                    "PDF contents:\n {}\n{}\n{}\nUser-query: {}",
+                    &pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]], question
+                ),
+            },
         ],
     };
     let result = OPENAI_CLIENT.chat_completion(req).await?;
