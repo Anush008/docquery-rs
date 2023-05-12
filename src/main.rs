@@ -4,7 +4,6 @@ use rust_bert::pipelines::sentence_embeddings::{
 };
 use std::sync::Mutex;
 use tokio::task;
-
 use actix_web::{post, web, App, HttpServer, Responder};
 
 #[post("/pdf")]
@@ -30,8 +29,7 @@ async fn main() -> std::io::Result<()> {
             .create_model()
             .unwrap()
     })
-    .await
-    .unwrap();
+    .await?;
     println!("Model loaded!");
     let model = web::Data::new(Mutex::new(model));
 

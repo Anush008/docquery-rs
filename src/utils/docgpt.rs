@@ -8,10 +8,11 @@ use regex::Regex;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{collections::HashMap, sync::Mutex};
 use uuid::Uuid;
+use rayon::prelude::*;
 
 lazy_static! {
-    static ref RE_NL: Regex = Regex::new(r"\n").unwrap();
-    static ref RE_SPACE: Regex = Regex::new(r"\s+").unwrap();
+    static ref RE_NL: Regex = Regex::new(r"\n").expect("Invalid regex");
+    static ref RE_SPACE: Regex = Regex::new(r"\s+").expect("Invalid regex");
     static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
         let mut pdf_collection: HashMap<String, Vec<String>> = HashMap::new();
         Mutex::new(pdf_collection)
@@ -43,7 +44,7 @@ pub fn chunk(pdf: Bytes, model: web::Data<Mutex<SentenceEmbeddingsModel>>) -> Re
             .chars()
             .collect::<Vec<char>>()
             .chunks(200)
-            .map(|chunk| chunk.iter().collect::<String>())
+            .map(|chunk| chunk.par_iter().collect::<String>())
             .map(|s: String| format!("[{page_num}] {s}"))
             .map(|s: String| {
                 let mut embedding = model.encode(&[&s]).expect("Encoding failed");
@@ -69,7 +70,7 @@ pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddings
     let embeddings = embeddings_collection.get(id).ok_or("Invalid Embeddings ID")?;
     let question_embedding = model.encode(&[question])?;
     let similarities: Vec<f32> = embeddings
-        .iter()
+        .par_iter()
         .map(|embedding| {
             cosine_similarity(
                 ArrayView1::from(&question_embedding[0]),
@@ -77,11 +78,11 @@ pub fn query(id: &str, question: &str, model: web::Data<Mutex<SentenceEmbeddings
             )
         })
         .collect();
-    let mut indexed_vec: Vec<(usize, &f32)> = similarities.iter().enumerate().collect();
-    indexed_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+    let mut indexed_vec: Vec<(usize, &f32)> = similarities.par_iter().enumerate().collect();
+    indexed_vec.par_sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
     let indices: Vec<usize> = indexed_vec.iter().map(|x| x.0).take(3).collect();
-    dbg!(&pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]]);
-    Ok(String::from("Hello World"))
+    let response = format!("{}\n{}\n{}", &pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]]);
+    Ok(response)
 }
 
 fn cosine_similarity(a: ArrayView1<f32>, b: ArrayView1<f32>) -> f32 {
