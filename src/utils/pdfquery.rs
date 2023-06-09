@@ -8,7 +8,8 @@ use rayon::prelude::*;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex}, io::Write,
+    io::Write,
+    sync::{Arc, Mutex},
 };
 use uuid::Uuid;
 

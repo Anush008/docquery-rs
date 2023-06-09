@@ -1,12 +1,12 @@
 mod routes;
 mod utils;
+use actix_files as fs;
 use actix_web::{web, App, HttpServer};
 use rust_bert::pipelines::sentence_embeddings::{
     builder::SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
 };
 use std::sync::{Arc, Mutex};
 use tokio::task;
-use actix_files as fs;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

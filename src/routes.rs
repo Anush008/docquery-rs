@@ -1,8 +1,8 @@
 use crate::utils::{
     data::Query,
-    pdfquery::{chunk, query, clear, store_jpg},
+    pdfquery::{chunk, clear, query, store_jpg},
 };
-use actix_web::{post, delete, web, HttpRequest, Responder};
+use actix_web::{delete, post, web, HttpRequest, Responder};
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::sync::{Arc, Mutex};
 
@@ -18,7 +18,6 @@ async fn upload_pdf(request: HttpRequest, pdf: web::Bytes) -> impl Responder {
 async fn upload_jpg(jpg: web::Bytes) -> impl Responder {
     store_jpg(jpg).await
 }
-
 
 #[post("/query")]
 async fn query_pdf(request: HttpRequest, data: web::Json<Query>) -> impl Responder {
