@@ -31,7 +31,7 @@ async fn main() -> std::io::Result<()> {
             .service(routes::upload_jpg)
             .service(fs::Files::new("/images", "./images"))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 80))?
     .run()
     .await
 }
