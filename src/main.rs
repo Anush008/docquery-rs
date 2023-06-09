@@ -6,6 +6,7 @@ use rust_bert::pipelines::sentence_embeddings::{
 };
 use std::sync::{Arc, Mutex};
 use tokio::task;
+use actix_files as fs;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -25,6 +26,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(model.clone())
             .service(routes::upload_pdf)
             .service(routes::query_pdf)
+            .service(routes::clear_pdfs)
+            .service(routes::upload_jpg)
+            .service(fs::Files::new("/images", "./images"))
     })
     .bind(("127.0.0.1", 8080))?
     .run()

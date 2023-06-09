@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, io::Write,
 };
 use uuid::Uuid;
 
@@ -65,6 +65,14 @@ pub fn chunk(
     Ok(key)
 }
 
+pub async fn store_jpg(jpg: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+    let key = Uuid::new_v4().to_string() + ".jpg";
+    let path = format!("./images/{}", &key);
+    let mut f = std::fs::File::create(path)?;
+    let _ = f.write_all(&jpg.to_vec());
+    Ok(key)
+}
+
 pub async fn query(
     id: &str,
     question: &str,
@@ -96,4 +104,12 @@ pub async fn query(
     );
     let response = ask_gpt(content).await;
     Ok(response?)
+}
+
+pub fn clear() -> Result<(), Box<dyn std::error::Error>> {
+    let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
+    let mut pdf_collection = PDF_COLLECTION.lock()?;
+    embeddings_collection.clear();
+    pdf_collection.clear();
+    Ok(())
 }
