@@ -12,8 +12,7 @@ async fn upload_pdf(request: HttpRequest, pdf: web::Bytes) -> impl Responder {
         .app_data::<Arc<Mutex<SentenceEmbeddingsModel>>>()
         .expect("Model app_data failed to load!");
     chunk(pdf, model)
-}
-
+}env::var("OPENAI_API_KEY").expect("OpenAI client instantiation failed!")
 #[post("/jpg")]
 async fn upload_jpg(jpg: web::Bytes) -> impl Responder {
     store_jpg(jpg).await
@@ -28,7 +27,7 @@ async fn query_pdf(request: HttpRequest, data: web::Json<Query>) -> impl Respond
     query(&data.id, &data.question, model).await
 }
 
-#[delete("/clear")]
+#[delete("/pdf")]
 async fn clear_pdfs() -> impl Responder {
     let _ = clear();
     "Deleted"
