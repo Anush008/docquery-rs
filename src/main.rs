@@ -1,7 +1,7 @@
 mod routes;
 mod utils;
 use actix_files as fs;
-use actix_web::{web, App, HttpServer};
+use actix_web::{web, App, HttpServer, HttpResponse};
 use rust_bert::pipelines::sentence_embeddings::{
     builder::SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
 };
@@ -24,6 +24,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::PayloadConfig::default().limit(1024 * 1024 * 10))
             .app_data(model.clone())
+            .route("/", web::get().to(|| HttpResponse::Ok()))
             .service(routes::upload_pdf)
             .service(routes::query_pdf)
             .service(routes::clear_pdfs)
