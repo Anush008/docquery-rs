@@ -29,7 +29,7 @@ pub fn preprocess_text(text: String) -> String {
 
 pub async fn ask_gpt(content: String) -> Result<String, Box<dyn std::error::Error>> {
     let query = concat!("You are PDFQuery. An AI assistant for PDFs that can answer user-queries about user-uploaded PDFs.",
-    "You generate a comprehensive answer to the user-query using the given chunks of the PDF content obtained from a semantic search. ",
+    "You generate a comprehensive, elaborate answer to the user-query using the given chunks of the PDF content obtained from semantic search. ",
     "You cite each reference using [ Page Number] notation (every PDF content has this number at the beginning). ",
     "Citation should be done at the end of each sentence. Only include information found in the PDF content. ",
     "You ignore any outlier PDF content which is unrelated to the query.");
