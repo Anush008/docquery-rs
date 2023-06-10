@@ -1,12 +1,12 @@
 mod routes;
 mod utils;
-use actix_web::{web, App, HttpServer};
+use actix_files as fs;
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use rust_bert::pipelines::sentence_embeddings::{
     builder::SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
 };
 use std::sync::{Arc, Mutex};
 use tokio::task;
-use actix_files as fs;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -20,8 +20,11 @@ async fn main() -> std::io::Result<()> {
     .await?;
     println!("Model loaded!");
 
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             .app_data(web::PayloadConfig::default().limit(1024 * 1024 * 10))
             .app_data(model.clone())
             .service(routes::upload_pdf)
