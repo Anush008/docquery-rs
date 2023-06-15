@@ -1,11 +1,14 @@
 #![allow(unused_mut)]
 
 use actix_web::web::Bytes;
+use image::ImageFormat;
 use lazy_static::lazy_static;
 use lopdf::Document;
 use ndarray::ArrayView1;
 use rayon::prelude::*;
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
+use std::fs::File;
+use std::io::Cursor;
 use std::{
     collections::HashMap,
     io::Write,
@@ -32,6 +35,8 @@ pub fn chunk(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let model = model.lock().expect("Model lock is poisoned!");
     let doc = Document::load_mem(&pdf.to_vec())?;
+    dbg!(doc.max_id);
+    dbg!(doc.max_bookmark_id);
     let mut embeddings: Vec<Vec<f32>> = Vec::new();
     let mut chunks: Vec<String> = Vec::new();
     let pages = doc.get_pages();
@@ -67,10 +72,27 @@ pub fn chunk(
 }
 
 pub async fn store_jpg(jpg: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+    let image = image::load_from_memory(&jpg)?;
+
+    let target_file_size = 3 * 1024 * 1024;
+    let mut resized_image = image.resize_to_fill(1024, 1024, image::imageops::FilterType::Triangle);
+    let mut buffer = Cursor::new(Vec::new());
+    resized_image.write_to(&mut buffer, ImageFormat::Jpeg)?;
+    while buffer.get_ref().len() > target_file_size {
+        resized_image = resized_image.resize_to_fill(
+            resized_image.width() / 2,
+            resized_image.height() / 2,
+            image::imageops::FilterType::Triangle,
+        );
+        buffer = Cursor::new(Vec::new());
+        resized_image.write_to(&mut buffer, ImageFormat::Jpeg)?;
+    }
+
     let key = Uuid::new_v4().to_string() + ".jpg";
     let path = format!("./images/{}", &key);
-    let mut f = std::fs::File::create(path)?;
-    let _ = f.write_all(&jpg.to_vec());
+    let mut compressed_file = File::create(path)?;
+    compressed_file.write_all(&buffer.into_inner())?;
+
     Ok(key)
 }
 
