@@ -122,7 +122,7 @@ pub async fn query(
     indexed_vec.par_sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
     let indices: Vec<usize> = indexed_vec.iter().map(|x| x.0).take(3).collect();
     let content = format!(
-        "PDF contents:\n {}\n{}\n{}\nUser-query: {}",
+        "PDF chunks:\n {}\n{}\n{}\nUser-query: {}",
         &pdf[indices[0]], &pdf[indices[1]], &pdf[indices[2]], question
     );
     let response = ask_gpt(content).await;
