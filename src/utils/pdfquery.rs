@@ -16,7 +16,8 @@ use std::{
 };
 use uuid::Uuid;
 
-use super::helpers::{ask_gpt, cosine_similarity, preprocess_text};
+use super::data::CustomPool;
+use super::helpers::{ask_gpt, cosine_similarity, preprocess_text, embed};
 
 lazy_static! {
     static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
@@ -31,43 +32,24 @@ lazy_static! {
 
 pub fn chunk(
     pdf: Bytes,
-    model: &Arc<Mutex<SentenceEmbeddingsModel>>,
+    pool: &Arc<CustomPool<SentenceEmbeddingsModel>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let model = model.lock().expect("Model lock is poisoned!");
     let doc = Document::load_mem(&pdf.to_vec())?;
-    dbg!(doc.max_id);
-    dbg!(doc.max_bookmark_id);
-    let mut embeddings: Vec<Vec<f32>> = Vec::new();
-    let mut chunks: Vec<String> = Vec::new();
     let pages = doc.get_pages();
-    chunks.push(format!("[0] Total pages in the PDF - {}", pages.len()));
-    embeddings.append(
-        &mut model.encode(&[&chunks
-            .first()
-            .ok_or("Page number embeddings failed to generate!")?])?,
-    );
-    for page_num in 1..=pages.len() {
-        let text = doc.extract_text(&[page_num.try_into()?])?;
-        let text = preprocess_text(text);
-        let mut chunk: Vec<String> = text
-            .chars()
-            .collect::<Vec<char>>()
-            .chunks(200)
-            .map(|chunk| chunk.par_iter().collect::<String>())
-            .map(|s: String| format!("[{page_num}] {s}"))
-            .map(|s: String| {
-                let mut embedding = model.encode(&[&s]).expect("PDF content embedding failed!");
-                embeddings.append(&mut embedding);
-                s
-            })
-            .collect();
-        chunks.append(&mut chunk);
-    }
+    let mut pages: Vec<String> = (1..=pages.len())
+        .into_iter()
+        .map(|page_num| {
+            let text = doc.extract_text(&[page_num.try_into().unwrap()]).unwrap();
+            format!("[{}] {}", page_num, preprocess_text(text))
+        })
+        .collect();
+    pages.push(format!("[0] Total pages in the PDF - {}", pages.len()));
     let key = Uuid::new_v4().to_string();
+    let embeddings = embed(&pages, pool);
     let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
     embeddings_collection.insert(key.clone(), embeddings);
     let mut pdf_collection = PDF_COLLECTION.lock()?;
-    pdf_collection.insert(key.clone(), chunks);
+    pdf_collection.insert(key.clone(), pages);
     Ok(key)
 }
 
@@ -99,16 +81,17 @@ pub async fn store_jpg(jpg: Bytes) -> Result<String, Box<dyn std::error::Error>>
 pub async fn query(
     id: &str,
     question: &str,
-    model: &Arc<Mutex<SentenceEmbeddingsModel>>,
+    pool: &Arc<CustomPool<SentenceEmbeddingsModel>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let model = model.lock().expect("Model lock is poisoned!");
     let embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
     let pdf_collection = PDF_COLLECTION.lock()?;
     let pdf = pdf_collection.get(id).ok_or("Invalid PDF ID")?;
     let embeddings = embeddings_collection
         .get(id)
         .ok_or("Invalid Embeddings ID!")?;
+    let model = pool.pull();
     let question_embedding = model.encode(&[question])?;
+    pool.push(model);
     let similarities: Vec<f32> = embeddings
         .par_iter()
         .map(|embedding| {
