@@ -18,7 +18,7 @@ lazy_static = "1.4.0"
 lopdf = "0.31.0"
 ndarray = "0.15.6"
 object-pool = "0.5.4"
-openai-api-rs = "0.1.7"
+openai-api-rs = "0.1.8"
 rayon = "1.7.0"
 regex = "1.7.3"
 rust-bert = {version="0.21.0", features=["download-libtorch"]}

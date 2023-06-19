@@ -47,16 +47,22 @@ pub async fn ask_gpt(content: String) -> Result<String, Box<dyn std::error::Erro
         messages: vec![
             chat_completion::ChatCompletionMessage {
                 role: chat_completion::MessageRole::system,
-                content: query.to_string(),
+                content: Some(query.to_string()),
+                name: None,
+                function_call: None,
             },
             chat_completion::ChatCompletionMessage {
                 role: chat_completion::MessageRole::user,
-                content,
+                content: Some(content),
+                name: None,
+                function_call: None,
             },
         ],
+        function_call: None,
+        functions: None
     };
     let result = OPENAI_CLIENT.chat_completion(req).await?;
-    Ok(result.choices[0].message.content.clone())
+   result.choices[0].message.content.clone().ok_or("No response!".into())
 }
 
 pub fn embed(strings: &Vec<String>, pool: &Arc<CustomPool<SentenceEmbeddingsModel>>) -> Vec<Vec<f32>> {
