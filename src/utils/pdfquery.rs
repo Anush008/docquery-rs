@@ -17,7 +17,7 @@ use std::{
 use uuid::Uuid;
 
 use super::data::CustomPool;
-use super::helpers::{ask_gpt, cosine_similarity, preprocess_text, embed};
+use super::helpers::{ask_gpt, cosine_similarity, embed, preprocess_text};
 
 lazy_static! {
     static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
@@ -36,6 +36,9 @@ pub fn chunk(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let doc = Document::load_mem(&pdf.to_vec())?;
     let pages = doc.get_pages();
+    if pages.len() > 200 {
+        return Err("PDF is too large!".into());
+    }
     let mut pages: Vec<String> = (1..=pages.len())
         .into_iter()
         .map(|page_num| {
