@@ -1,15 +1,15 @@
 use crate::utils::{
-    data::{Query, CustomPool},
+    data::{Query},
     pdfquery::{chunk, clear, query, store_jpg},
 };
 use actix_web::{delete, post, web, HttpRequest, Responder};
 use rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[post("/pdf")]
 async fn upload_pdf(request: HttpRequest, pdf: web::Bytes) -> impl Responder {
     let pool = request
-        .app_data::<Arc<CustomPool<SentenceEmbeddingsModel>>>()
+        .app_data::<Arc<Mutex<SentenceEmbeddingsModel>>>()
         .expect("Pool app_data failed to load!");
     chunk(pdf, &pool)
 }
@@ -22,7 +22,7 @@ async fn upload_jpg(jpg: web::Bytes) -> impl Responder {
 #[post("/query")]
 async fn query_pdf(request: HttpRequest, data: web::Json<Query>) -> impl Responder {
     let pool = request
-        .app_data::<Arc<CustomPool<SentenceEmbeddingsModel>>>()
+        .app_data::<Arc<Mutex<SentenceEmbeddingsModel>>>()
         .expect("Pool app_data failed to load!");
     query(&data.id, &data.question, &pool).await
 }

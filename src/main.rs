@@ -2,7 +2,7 @@ mod routes;
 mod utils;
 use actix_files as fs;
 use actix_web::{web, App, HttpResponse, HttpServer};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::task;
 
 use crate::utils::helpers::create_embedding_model;
@@ -10,7 +10,7 @@ use crate::utils::helpers::create_embedding_model;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let pool = task::spawn_blocking(move || {
-        Arc::new(utils::data::CustomPool::new(10, create_embedding_model))
+        Arc::new(Mutex::new(create_embedding_model()))
     })
     .await?;
     println!("Pool created!");

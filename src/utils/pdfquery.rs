@@ -16,8 +16,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use super::data::CustomPool;
-use super::helpers::{ask_gpt, cosine_similarity, embed, preprocess_text};
+use super::helpers::{ask_gpt, cosine_similarity, preprocess_text};
 
 lazy_static! {
     static ref PDF_COLLECTION: Mutex<HashMap<String, Vec<String>>> = {
@@ -32,7 +31,7 @@ lazy_static! {
 
 pub fn chunk(
     pdf: Bytes,
-    pool: &Arc<CustomPool<SentenceEmbeddingsModel>>,
+    pool: &Arc<Mutex<SentenceEmbeddingsModel>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let doc = Document::load_mem(&pdf.to_vec())?;
     let pages = doc.get_pages();
@@ -48,7 +47,8 @@ pub fn chunk(
         .collect();
     pages.push(format!("[0] Total pages in the PDF - {}", pages.len()));
     let key = Uuid::new_v4().to_string();
-    let embeddings = embed(&pages, pool);
+    let model = pool.lock().expect("Mutex lock poisoned");
+    let embeddings = model.encode(&pages).expect("Embedding failed");
     let mut embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
     embeddings_collection.insert(key.clone(), embeddings);
     let mut pdf_collection = PDF_COLLECTION.lock()?;
@@ -84,7 +84,7 @@ pub async fn store_jpg(jpg: Bytes) -> Result<String, Box<dyn std::error::Error>>
 pub async fn query(
     id: &str,
     question: &str,
-    pool: &Arc<CustomPool<SentenceEmbeddingsModel>>,
+    pool: &Arc<Mutex<SentenceEmbeddingsModel>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let embeddings_collection = EMBEDDINGS_COLLECTION.lock()?;
     let pdf_collection = PDF_COLLECTION.lock()?;
@@ -92,9 +92,9 @@ pub async fn query(
     let embeddings = embeddings_collection
         .get(id)
         .ok_or("Invalid Embeddings ID!")?;
-    let model = pool.pull();
+    let model = pool.lock().expect("Model lock poisoned");
     let question_embedding = model.encode(&[question])?;
-    pool.push(model);
+    drop(model);
     let similarities: Vec<f32> = embeddings
         .par_iter()
         .map(|embedding| {
