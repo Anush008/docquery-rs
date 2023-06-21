@@ -30,4 +30,5 @@ docquery-rs is a Rust back-end that applies text embedding and generation models
 
 ## Acknowledgements
 
-Thank you to [Hugging Face](https://huggingface.co) for hosting a set of weights compatible with Rust-Bert.
+* Thank you to [Hugging Face](https://huggingface.co) for hosting a set of weights compatible with Rust-Bert.
+* [bhaskatripathi/pdfGPT](https://github.com/bhaskatripathi/pdfGPT) for the chunking approach.
